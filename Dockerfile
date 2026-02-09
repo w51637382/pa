@@ -13,6 +13,3 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 # 设置工作目录
 WORKDIR /data
-
-# 容器启动默认执行SteamCMD
-
