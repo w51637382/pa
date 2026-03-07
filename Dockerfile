@@ -12,20 +12,35 @@ RUN apt-get update && \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 # ========== 仅新增以下SteamCMD安装步骤（修复add-apt-repository缺失问题） ==========
-RUN set -eux; \
-    # 1. 先安装add-apt-repository依赖+SteamCMD必需32位库
-    apt-get update && apt-get install -y --no-install-recommends \
-        software-properties-common lib32gcc-s1 lib32stdc++6 ca-certificates; \
-    # 2. 启用multiverse源+32位架构（Ubuntu安装steamcmd必需）
-    add-apt-repository -y multiverse; \
-    dpkg --add-architecture i386; \
-    apt-get update; \
-    # 3. 安装steamcmd（APT默认安装）
-    apt-get install -y --no-install-recommends steamcmd; \
-    # 4. 软链接到易调用路径（不影响原有逻辑）
-    ln -s /usr/games/steamcmd /usr/local/bin/steamcmd; \
-    # 5. 清理缓存（保持和原有逻辑一致）
-    apt-get clean && rm -rf /var/lib/apt/lists/*;
+# ========== 整合新脚本的SteamCMD规范安装逻辑 ==========
+# 插入Steam交互提示自动应答
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN echo steam steam/question select "I AGREE" | debconf-set-selections \
+ && echo steam steam/license note '' | debconf-set-selections
+
+# 安装SteamCMD（适配Debian 12 slim，启用i386架构+non-free源）
+RUN dpkg --add-architecture i386 \
+ && echo "deb http://deb.debian.org/debian bookworm non-free" >> /etc/apt/sources.list \
+ && apt-get update -y \
+ && apt-get install -y --no-install-recommends ca-certificates locales steamcmd \
+ && rm -rf /var/lib/apt/lists/*
+
+# 添加Unicode支持
+RUN sed -i 's/^# *\(en_US.UTF-8\)/\1/' /etc/locale.gen \
+ && locale-gen en_US.UTF-8
+
+# 创建SteamCMD全局软链接
+RUN ln -s /usr/games/steamcmd /usr/bin/steamcmd
+
+# 更新SteamCMD并验证版本
+RUN steamcmd +quit
+
+# 修复缺失的目录和库链接（确保SteamCMD运行正常）
+RUN mkdir -p $HOME/.steam \
+ && ln -s $HOME/.local/share/Steam/steamcmd/linux32 $HOME/.steam/sdk32 \
+ && ln -s $HOME/.local/share/Steam/steamcmd/linux64 $HOME/.steam/sdk64 \
+ && ln -s $HOME/.steam/sdk32/steamclient.so $HOME/.steam/sdk32/steamservice.so \
+ && ln -s $HOME/.steam/sdk64/steamclient.so $HOME/.steam/sdk64/steamservice.so
 # ========== SteamCMD安装步骤结束 ==========
 
 
